@@ -76,6 +76,7 @@ func (p *CredentialsProvider) Save(alibabacloudCreds *AliCloudCredentials) error
 		AccessKeyId:     alibabacloudCreds.AliCloudAccessKey,
 		AccessKeySecret: alibabacloudCreds.AliCloudSecretKey,
 		StsToken:        alibabacloudCreds.AliCloudSecurityToken,
+		RegionId:        alibabacloudCreds.Region,
 		OutputFormat:    "json",
 		Language:        "en",
 	}
@@ -139,7 +140,7 @@ func (p *CredentialsProvider) ensureConfigExists() error {
 			logger.WithField("dir", dir).Debug("Dir created")
 
 			// create an base config file
-			err = ioutil.WriteFile(filename, []byte("{}"), 0600)
+			err = ioutil.WriteFile(filename, []byte("["+p.Profile+"]"), 0600)
 			if err != nil {
 				return err
 			}
