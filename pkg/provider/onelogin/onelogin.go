@@ -121,7 +121,7 @@ func (c *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error) 
 
 	logger.Debug("Requesting SAML Assertion")
 
-	// request the SAML assertion. For more details check https://developers.onelogin.com/api-docs/1/saml-assertions/generate-saml-assertion
+	// request the SAML assertion. For more details check https://developers.onelogin.com/api-docs/2/saml-assertions/generate-saml-assertion
 	res, err := c.Client.Do(req)
 	if err != nil {
 		return "", errors.Wrap(err, "error retrieving auth response")
@@ -166,7 +166,7 @@ func (c *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error) 
 }
 
 // generateToken is used to generate access token for all OneLogin APIs.
-// For more infor read https://developers.onelogin.com/api-docs/1/oauth20-tokens/generate-tokens-2
+// For more infor read https://developers.onelogin.com/api-docs/2/oauth20-tokens/generate-tokens-2
 func generateToken(oc *Client, loginDetails *creds.LoginDetails, host string) (string, error) {
 	oauthTokenURL := fmt.Sprintf("https://%s/auth/oauth2/v2/token", host)
 	req, err := http.NewRequest("POST", oauthTokenURL, strings.NewReader(`{"grant_type":"client_credentials"}`))
@@ -200,7 +200,7 @@ func addContentHeaders(r *http.Request) {
 }
 
 // verifyMFA is used to either prompt to user for one time password or request approval using push notification.
-// For more details check https://developers.onelogin.com/api-docs/1/saml-assertions/verify-factor
+// For more details check https://developers.onelogin.com/api-docs/2/saml-assertions/verify-factor
 func verifyMFA(oc *Client, oauthToken, appID, resp string) (string, error) {
 	stateToken := gjson.Get(resp, "state_token").String()
 	// choose an mfa option if there are multiple enabled
@@ -304,7 +304,7 @@ func verifyMFA(oc *Client, oauthToken, appID, resp string) (string, error) {
 
 	case IdentifierOneLoginProtectMfa:
 		// set the body payload to disable further push notifications (i.e. set do_not_notify to true)
-		// https://developers.onelogin.com/api-docs/1/saml-assertions/verify-factor
+		// https://developers.onelogin.com/api-docs/2/saml-assertions/verify-factor
 		var verifyBody bytes.Buffer
 		err := json.NewEncoder(&verifyBody).Encode(VerifyRequest{AppID: appID, DeviceID: mfaDeviceID, DoNotNotify: true, StateToken: stateToken})
 		if err != nil {
