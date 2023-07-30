@@ -723,17 +723,6 @@ func (ac *Client) getSamlAssertion(resBodyStr string) (string, error) {
 	return samlAssertion, nil
 }
 
-/* // resend when show 'working'
-func (ac *Client) working(srcBodyStr string) (*http.Response, error) {
-	if  ac.isHiddenForm(srcBodyStr){
-		res, err = ac.reProcessForm(srcBodyStr)
-		oidcResponse, err := ioutil.ReadAll(res.Body)
-		oidcResponseStr := string(oidcResponse)
-		fmt.Println(oidcResponseStr)
-	   if err != nil {
-		 return samlAssertion, errors.Wrap(err, "oidc login response error")
-	 }
-} */
 // Authenticate to AzureAD and return the data from the body of the SAML assertion.
 func (ac *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error) {
 
@@ -1103,7 +1092,6 @@ func (ac *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 		}
 	
 		oidcResponseStr = string(oidcResponse)
-		fmt.Println(oidcResponseStr)
 	}
 	logger.Debug("processing a 'hiddenform'")
 	res, err = ac.reProcessForm(resBodyStr)
@@ -1167,8 +1155,6 @@ func (ac *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 		}
 	
 		resBodyStr = string(resBody)
-		fmt.Println(resBodyStr)
-
 	}
 	if strings.Contains(resBodyStr, "urlSkipMfaRegistration") {
 		var samlAssertionSkipMfaResp SkipMfaResponse
@@ -1214,7 +1200,6 @@ func (ac *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 	if samlAssertion != "" {
 		return samlAssertion, nil
 	}
-	fmt.Println(resBodyStr)
 	res, err = ac.reProcess(resBodyStr)
 	if err != nil {
 		return samlAssertion, errors.Wrap(err, "failed to saml request reprocess")
