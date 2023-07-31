@@ -700,7 +700,7 @@ func (ac *Client) reProcessForm(srcBodyStr string) (*http.Response, error) {
 	return res, nil
 }
 
-// get saml assertion
+// Get saml assertion
 func (ac *Client) getSamlAssertion(resBodyStr string) (string, error) {
 	var samlAssertion string
 
