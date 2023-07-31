@@ -629,12 +629,12 @@ func New(idpAccount *cfg.IDPAccount) (*Client, error) {
 	}, nil
 }
 
-//check if HiddenForm
+//Check if HiddenForm
 func (ac *Client) isHiddenForm(resBodyStr string) bool {
 	return strings.HasPrefix(resBodyStr, "<html><head><title>Working...</title>") && strings.Contains(resBodyStr, "name=\"hiddenform\"")
 }
 
-// get hidden form
+// Resubmit  form
 func (ac *Client) reSubmitFormData(resBodyStr string) (url.Values, string, error) {
 	formValues := url.Values{}
 	var formSubmitUrl string
@@ -669,7 +669,7 @@ func (ac *Client) reSubmitFormData(resBodyStr string) (url.Values, string, error
 	return formValues, formSubmitUrl, nil
 }
 
-// resend form
+// Reprocess form
 func (ac *Client) reProcessForm(srcBodyStr string) (*http.Response, error) {
 	var res *http.Response
 	var err error
