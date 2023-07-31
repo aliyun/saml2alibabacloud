@@ -629,6 +629,100 @@ func New(idpAccount *cfg.IDPAccount) (*Client, error) {
 	}, nil
 }
 
+//Check if HiddenForm
+func (ac *Client) isHiddenForm(resBodyStr string) bool {
+	return strings.HasPrefix(resBodyStr, "<html><head><title>Working...</title>") && strings.Contains(resBodyStr, "name=\"hiddenform\"")
+}
+
+// Resubmit  form
+func (ac *Client) reSubmitFormData(resBodyStr string) (url.Values, string, error) {
+	formValues := url.Values{}
+	var formSubmitUrl string
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(resBodyStr))
+	if err != nil {
+		return formValues, formSubmitUrl, errors.Wrap(err, "failed to build document from response")
+	}
+
+	// prefil form data from page as provided
+	doc.Find("input").Each(func(i int, s *goquery.Selection) {
+		name, ok := s.Attr("name")
+		if !ok {
+			return
+		}
+		value, ok := s.Attr("value")
+		if !ok {
+			return
+		}
+		formValues.Set(name, value)
+	})
+
+	// identify form submit url/path
+	doc.Find("form").Each(func(i int, s *goquery.Selection) {
+		action, ok := s.Attr("action")
+		if !ok {
+			return
+		}
+		formSubmitUrl = action
+	})
+
+	return formValues, formSubmitUrl, nil
+}
+
+// Reprocess form
+func (ac *Client) reProcessForm(srcBodyStr string) (*http.Response, error) {
+	var res *http.Response
+	var err error
+	var formValues url.Values
+	var formSubmitUrl string
+
+	formValues, formSubmitUrl, err = ac.reSubmitFormData(srcBodyStr)
+	if err != nil {
+		return res, errors.Wrap(err, "failed to parse hiddenform form")
+	}
+
+	if formSubmitUrl == "" {
+		return res, fmt.Errorf("unable to locate hiddenform submit URL")
+	}
+
+	req, err := http.NewRequest("POST", formSubmitUrl, strings.NewReader(formValues.Encode()))
+	if err != nil {
+		return res, errors.Wrap(err, "error building hiddenform request")
+	}
+
+	req.Header.Add("Content-Type", "application/x-www-form-urlencoded")
+
+	res, err = ac.client.Do(req)
+	if err != nil {
+		return res, errors.Wrap(err, "error retrieving hiddenform results")
+	}
+
+	return res, nil
+}
+
+// Get saml assertion
+func (ac *Client) getSamlAssertion(resBodyStr string) (string, error) {
+	var samlAssertion string
+
+	doc, err := goquery.NewDocumentFromReader(strings.NewReader(resBodyStr))
+	if err != nil {
+		return samlAssertion, errors.Wrap(err, "failed to build document from response")
+	}
+
+	doc.Find("input").Each(func(i int, s *goquery.Selection) {
+		attrName, ok := s.Attr("name")
+		if !ok {
+			return
+		}
+		if attrName != "SAMLResponse" {
+			return
+		}
+		samlAssertion, _ = s.Attr("value")
+	})
+
+	return samlAssertion, nil
+}
+
 // Authenticate to AzureAD and return the data from the body of the SAML assertion.
 func (ac *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error) {
 
@@ -986,6 +1080,21 @@ func (ac *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 	}
 
 	oidcResponseStr := string(oidcResponse)
+	for ac.isHiddenForm(oidcResponseStr) {
+		res, err := ac.reProcessForm(oidcResponseStr)
+		if err != nil {
+			return samlAssertion, errors.Wrap(err, "oidc login response error")
+		}
+	
+		oidcResponse, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			return samlAssertion, errors.Wrap(err, "oidc login response error")
+		}
+	
+		oidcResponseStr = string(oidcResponse)
+	}
+	logger.Debug("processing a 'hiddenform'")
+	res, err = ac.reProcessForm(resBodyStr)
 
 	// data is embedded javascript
 	// window.location = 'https:/..../?SAMLRequest=......'
@@ -1030,6 +1139,23 @@ func (ac *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 		return samlAssertion, errors.Wrap(err, "error oidc login response read")
 	}
 	resBodyStr = string(resBody)
+	for ac.isHiddenForm(resBodyStr) {
+		if samlAssertion, _ = ac.getSamlAssertion(resBodyStr); samlAssertion != "" {
+			logger.Debug("processing a SAMLResponse")
+			return samlAssertion, nil
+		}
+		res, err := ac.reProcessForm(resBodyStr)
+		if err != nil {
+			return samlAssertion, errors.Wrap(err, "oidc login response error")
+		}
+	
+		resBody, err = ioutil.ReadAll(res.Body)
+		if err != nil {
+			return samlAssertion, errors.Wrap(err, "oidc login response error")
+		}
+	
+		resBodyStr = string(resBody)
+	}
 	if strings.Contains(resBodyStr, "urlSkipMfaRegistration") {
 		var samlAssertionSkipMfaResp SkipMfaResponse
 		var skipMfaJson string
