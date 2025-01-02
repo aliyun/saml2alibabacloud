@@ -77,6 +77,7 @@ func (p *CredentialsProvider) Save(alibabacloudCreds *AliCloudCredentials) error
 		AccessKeySecret: alibabacloudCreds.AliCloudSecretKey,
 		StsToken:        alibabacloudCreds.AliCloudSecurityToken,
 		OutputFormat:    "json",
+		RegionId: alibabacloudCreds.Region,
 		Language:        "en",
 	}
 	configuration.PutProfile(profile)

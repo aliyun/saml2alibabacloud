@@ -27,6 +27,23 @@ func Login(loginFlags *flags.LoginExecFlags) error {
 	}
 
 	sharedCreds := alibabacloudconfig.NewSharedCredentials(account.Profile)
+    
+	logger.Debug("check if Creds Exist")
+
+	// this checks if the credentials file has been created yet
+	exist, err := sharedCreds.CredsExists()
+	if err != nil {
+		return errors.Wrap(err, "error loading credentials")
+	}
+	if !exist {
+		log.Println("unable to load credentials, login required to create them")
+		return nil
+	}
+
+	if !sharedCreds.Expired() && !loginFlags.Force {
+		log.Println("credentials are not expired skipping")
+		return nil
+	}
 
 	loginDetails, err := resolveLoginDetails(account, loginFlags)
 	if err != nil {
@@ -272,7 +289,8 @@ func saveCredentials(alibabacloudCreds *alibabacloudconfig.AliCloudCredentials, 
 	log.Println("")
 	log.Println("Your new access key pair has been stored in the AlibabaCloud CLI configuration")
 	// log.Printf("Note that it will expire at %v", alibabacloudCreds.Expires)
-	log.Println("To use this credential, call the AlibabaCloud CLI with the --profile option (e.g. aliyun --profile", sharedCreds.Profile, "sts GetCallerIdentity --region=cn-hangzhou).")
-
+	log.Printf("To use this credential, call the AlibabaCloud CLI with the --profile option (e.g. aliyun --profile %s sts GetCallerIdentity --region=%s)", sharedCreds.Profile, alibabacloudCreds.Region)
+	log.Println("")
+	log.Printf("For your convenience, please execute: alias aliyun='aliyun --profile %s'", sharedCreds.Profile)
 	return nil
 }
