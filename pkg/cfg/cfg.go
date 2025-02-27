@@ -31,22 +31,29 @@ const (
 
 // IDPAccount saml IDP account
 type IDPAccount struct {
-	AppID             string `ini:"app_id"` // used by OneLogin and AzureAD
-	URL               string `ini:"url"`
-	Username          string `ini:"username"`
-	Provider          string `ini:"provider"`
-	MFA               string `ini:"mfa"`
-	SkipVerify        bool   `ini:"skip_verify"`
-	Timeout           int    `ini:"timeout"`
-	AlibabaCloudURN   string `ini:"alibabacloud_urn"`
-	SessionDuration   int    `ini:"alibabacloud_session_duration"`
-	Profile           string `ini:"alibabacloud_profile"`
-	ResourceID        string `ini:"resource_id"` // used by F5APM
-	Subdomain         string `ini:"subdomain"`   // used by OneLogin
-	RoleARN           string `ini:"role_arn"`
-	Region            string `ini:"region"`
-	HTTPAttemptsCount string `ini:"http_attempts_count"`
-	HTTPRetryDelay    string `ini:"http_retry_delay"`
+	AppID                 string `ini:"app_id"` // used by OneLogin and AzureAD
+	URL                   string `ini:"url"`
+	Username              string `ini:"username"`
+	Provider              string `ini:"provider"`
+	MFA                   string `ini:"mfa"`
+	SkipVerify            bool   `ini:"skip_verify"`
+	Timeout               int    `ini:"timeout"`
+	AlibabaCloudURN       string `ini:"alibabacloud_urn"`
+	SessionDuration       int    `ini:"alibabacloud_session_duration"`
+	Profile               string `ini:"alibabacloud_profile"`
+	ResourceID            string `ini:"resource_id"` // used by F5APM
+	Subdomain             string `ini:"subdomain"`   // used by OneLogin
+	RoleARN               string `ini:"role_arn"`
+	Region                string `ini:"region"`
+	HTTPAttemptsCount     string `ini:"http_attempts_count"`
+	HTTPRetryDelay        string `ini:"http_retry_delay"`
+	BrowserType           string `ini:"browser_type,omitempty"`            // used by 'Browser' Provider
+	BrowserExecutablePath string `ini:"browser_executable_path,omitempty"` // used by 'Browser' Provider
+	BrowserAutoFill       bool   `ini:"browser_autofill,omitempty"`        // used by 'Browser' Provider
+	DownloadBrowser       bool   `ini:"download_browser_driver"`           // used by browser
+	BrowserDriverDir      string `ini:"browser_driver_dir,omitempty"`      // used by browser; hide from user if not set
+	Headless              bool   `ini:"headless"`                          // used by browser
+	Prompter              string `ini:"prompter"`
 }
 
 func (ia IDPAccount) String() string {

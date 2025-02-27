@@ -13,6 +13,7 @@ import (
 	"github.com/aliyun/saml2alibabacloud/pkg/provider/adfs"
 	"github.com/aliyun/saml2alibabacloud/pkg/provider/adfs2"
 	"github.com/aliyun/saml2alibabacloud/pkg/provider/akamai"
+	"github.com/aliyun/saml2alibabacloud/pkg/provider/browser"
 	"github.com/aliyun/saml2alibabacloud/pkg/provider/f5apm"
 	"github.com/aliyun/saml2alibabacloud/pkg/provider/googleapps"
 	"github.com/aliyun/saml2alibabacloud/pkg/provider/jumpcloud"
@@ -47,6 +48,7 @@ var MFAsByProvider = ProviderList{
 	"ShibbolethECP": []string{"auto", "phone", "push", "passcode"},
 	"NetIQ":         []string{"Auto", "Privileged"},
 	"Custom":        []string{"Auto"},
+	"Browser":       []string{"Auto"},
 }
 
 // Names get a list of provider names
@@ -171,6 +173,8 @@ func NewSAMLClient(idpAccount *cfg.IDPAccount) (SAMLClient, error) {
 		return netiq.New(idpAccount, idpAccount.MFA)
 	case "Custom":
 		return custom.New(idpAccount)
+	case "Browser":
+		return browser.New(idpAccount)
 	default:
 		return nil, fmt.Errorf("invalid provider: %v", idpAccount.Provider)
 	}

@@ -15,7 +15,7 @@ import (
 
 var (
 	// Version app version
-	Version = "0.0.7"
+	Version = "0.0.8"
 )
 
 // The `cmdLineList` type is used to make a `[]string` meet the requirements
@@ -79,6 +79,9 @@ func main() {
 	app.Flag("session-duration", "The duration of your AlibabaCloud Session. (env: SAML2ALIBABACLOUD_SESSION_DURATION)").Envar("SAML2ALIBABACLOUD_SESSION_DURATION").IntVar(&commonFlags.SessionDuration)
 	app.Flag("disable-keychain", "Do not use keychain at all.").Envar("SAML2ALIBABACLOUD_DISABLE_KEYCHAIN").BoolVar(&commonFlags.DisableKeychain)
 	app.Flag("region", "AlibabaCloud region to use for API requests, e.g. cn-hangzhou, ap-southeast-1 (env: SAML2ALIBABACLOUD_REGION)").Envar("SAML2ALIBABACLOUD_REGION").Short('r').StringVar(&commonFlags.Region)
+	app.Flag("browser-type", "The configured browser type when the IDP provider is set to Browser. if not set 'chromium' will be used. (env: SAML2ALIBABACLOUD_BROWSER_TYPE)").Envar("SAML2ALIBABACLOUD_BROWSER_TYPE").EnumVar(&commonFlags.BrowserType, "chromium", "firefox", "webkit", "chrome", "chrome-beta", "chrome-dev", "chrome-canary", "msedge", "msedge-beta", "msedge-dev", "msedge-canary")
+	app.Flag("browser-executable-path", "The configured browser full path when the IDP provider is set to Browser. If set, no browser download will be performed and the executable path will be used instead. (env: SAML2ALIBABACLOUD_BROWSER_EXECUTABLE_PATH)").Envar("SAML2ALIBABACLOUD_BROWSER_EXECUTABLE_PATH").StringVar(&commonFlags.BrowserExecutablePath)
+	app.Flag("browser-autofill", "Configures browser to autofill the username and password. (env: SAML2ALIBABACLOUD_BROWSER_AUTOFILL)").Envar("SAML2ALIBABACLOUD_BROWSER_AUTOFILL").BoolVar(&commonFlags.BrowserAutoFill)
 
 	// `configure` command and settings
 	cmdConfigure := app.Command("configure", "Configure a new IDP account.")
@@ -99,6 +102,7 @@ func main() {
 	cmdLogin.Flag("client-id", "OneLogin client id, used to generate API access token. (env: ONELOGIN_CLIENT_ID)").Envar("ONELOGIN_CLIENT_ID").StringVar(&commonFlags.ClientID)
 	cmdLogin.Flag("client-secret", "OneLogin client secret, used to generate API access token. (env: ONELOGIN_CLIENT_SECRET)").Envar("ONELOGIN_CLIENT_SECRET").StringVar(&commonFlags.ClientSecret)
 	cmdLogin.Flag("force", "Refresh credentials even if not expired.").BoolVar(&loginFlags.Force)
+	cmdLogin.Flag("download-browser-driver", "Automatically download browsers for Browser IDP. (env: SAML2ALIBABACLOUD_AUTO_BROWSER_DOWNLOAD)").Envar("SAML2ALIBABACLOUD_AUTO_BROWSER_DOWNLOAD").BoolVar(&loginFlags.DownloadBrowser)
 
 	// `exec` command and settings
 	cmdExec := app.Command("exec", "Exec the supplied command with env vars from STS token.")

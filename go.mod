@@ -22,7 +22,7 @@ require (
 	github.com/sirupsen/logrus v1.9.3
 	github.com/skratchdot/open-golang v0.0.0-20200116055534-eef842397966
 	github.com/stretchr/testify v1.8.4
-	github.com/tidwall/gjson v1.1.1
+	github.com/tidwall/gjson v1.17.0
 	golang.org/x/net v0.24.0
 	gopkg.in/ini.v1 v1.57.0
 )
@@ -34,7 +34,10 @@ require (
 	github.com/andybalholm/cascadia v1.3.2 // indirect
 	github.com/creack/pty v1.1.20 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/deckarep/golang-set/v2 v2.6.0 // indirect
 	github.com/dvsekhvalnov/jose2go v1.5.0 // indirect
+	github.com/go-jose/go-jose/v3 v3.0.3 // indirect
+	github.com/go-stack/stack v1.8.1 // indirect
 	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/gsterjov/go-libsecret v0.0.0-20161001094733-a6f4afe4910c // indirect
 	github.com/jmespath/go-jmespath v0.4.0 // indirect
@@ -50,10 +53,12 @@ require (
 	github.com/mtibben/percent v0.2.1 // indirect
 	github.com/onsi/ginkgo v1.14.2 // indirect
 	github.com/onsi/gomega v1.10.3 // indirect
+	github.com/playwright-community/playwright-go v0.5001.0 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/smartystreets/goconvey v0.0.0-20190731233626-505e41936337 // indirect
 	github.com/stretchr/objx v0.5.0 // indirect
-	github.com/tidwall/match v1.0.0 // indirect
+	github.com/tidwall/match v1.1.1 // indirect
+	github.com/tidwall/pretty v1.2.1 // indirect
 	golang.org/x/crypto v0.22.0 // indirect
 	golang.org/x/sys v0.21.0 // indirect
 	golang.org/x/term v0.19.0 // indirect
