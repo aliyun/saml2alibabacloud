@@ -6,35 +6,39 @@ import (
 
 // CommonFlags flags common to all of the `saml2alibabacloud` commands (except `help`)
 type CommonFlags struct {
-	AppID           string
-	ClientID        string
-	ClientSecret    string
-	ConfigFile      string
-	IdpAccount      string
-	IdpProvider     string
-	MFA             string
-	MFAToken        string
-	URL             string
-	Username        string
-	Password        string
-	RoleArn         string
-	AlibabaCloudURN string
-	SessionDuration int
-	SkipPrompt      bool
-	SkipVerify      bool
-	Profile         string
-	Subdomain       string
-	ResourceID      string
-	DisableKeychain bool
-	Region          string
+	AppID                 string
+	BrowserType           string
+	BrowserExecutablePath string
+	BrowserAutoFill       bool
+	ClientID              string
+	ClientSecret          string
+	ConfigFile            string
+	IdpAccount            string
+	IdpProvider           string
+	MFA                   string
+	MFAToken              string
+	URL                   string
+	Username              string
+	Password              string
+	RoleArn               string
+	AlibabaCloudURN       string
+	SessionDuration       int
+	SkipPrompt            bool
+	SkipVerify            bool
+	Profile               string
+	Subdomain             string
+	ResourceID            string
+	DisableKeychain       bool
+	Region                string
 }
 
 // LoginExecFlags flags for the Login / Exec commands
 type LoginExecFlags struct {
-	CommonFlags  *CommonFlags
-	Force        bool
-	DuoMFAOption string
-	ExecProfile  string
+	CommonFlags     *CommonFlags
+	DownloadBrowser bool
+	Force           bool
+	DuoMFAOption    string
+	ExecProfile     string
 }
 
 type ConsoleFlags struct {
@@ -62,6 +66,10 @@ func ApplyFlagOverrides(commonFlags *CommonFlags, account *cfg.IDPAccount) {
 
 	if commonFlags.IdpProvider != "" {
 		account.Provider = commonFlags.IdpProvider
+	}
+
+	if commonFlags.BrowserType != "" {
+		account.BrowserType = commonFlags.BrowserType
 	}
 
 	if commonFlags.MFA != "" {
