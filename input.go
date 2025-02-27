@@ -60,7 +60,9 @@ func PromptForConfigurationDetails(idpAccount *cfg.IDPAccount) error {
 
 // PromptForLoginDetails prompt the user to present their username, password
 func PromptForLoginDetails(loginDetails *creds.LoginDetails, provider string) error {
-
+	if provider == "Browser" {
+		return nil
+	}
 	log.Println("To use saved password just hit enter.")
 
 	loginDetails.Username = prompter.String("Username", loginDetails.Username)

@@ -126,7 +126,7 @@ func resolveLoginDetails(account *cfg.IDPAccount, loginFlags *flags.LoginExecFla
 
 	// log.Printf("loginFlags %+v", loginFlags)
 
-	loginDetails := &creds.LoginDetails{URL: account.URL, Username: account.Username, MFAToken: loginFlags.CommonFlags.MFAToken, DuoMFAOption: loginFlags.DuoMFAOption}
+	loginDetails := &creds.LoginDetails{URL: account.URL, Username: account.Username, MFAToken: loginFlags.CommonFlags.MFAToken, DuoMFAOption: loginFlags.DuoMFAOption, Provider: account.Provider}
 
 	log.Printf("Using IDP Account %s to access %s %s", loginFlags.CommonFlags.IdpAccount, account.Provider, account.URL)
 
@@ -160,6 +160,12 @@ func resolveLoginDetails(account *cfg.IDPAccount, loginFlags *flags.LoginExecFla
 	// if you supply a client_secret in a flag it takes precedence
 	if loginFlags.CommonFlags.ClientSecret != "" {
 		loginDetails.ClientSecret = loginFlags.CommonFlags.ClientSecret
+	}
+
+	if loginFlags.DownloadBrowser {
+		loginDetails.DownloadBrowser = loginFlags.DownloadBrowser
+	} else if account.DownloadBrowser {
+		loginDetails.DownloadBrowser = account.DownloadBrowser
 	}
 
 	// log.Printf("loginDetails %+v", loginDetails)
