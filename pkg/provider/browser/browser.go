@@ -208,7 +208,7 @@ var autoFill = func(page playwright.Page, loginDetails *creds.LoginDetails) erro
 }
 
 func aliyunSigninRegex() (*regexp.Regexp, error) {
-	return regexp.Compile(`https:\/\/signin\.alibabacloud\.com\/saml-role\/sso`)
+	return regexp.Compile(`https:\/\/signin\.(alibabacloud|aliyun)\.com\/saml-role\/sso`)
 }
 
 func (cl *Client) Validate(loginDetails *creds.LoginDetails) error {
