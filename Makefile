@@ -11,16 +11,11 @@ BIN_DIR := $(CURDIR)/bin
 
 ci: prepare test
 
-prepare: prepare.metalinter
+prepare:
 	GOBIN=$(BIN_DIR) go install github.com/buildkite/github-release
 	GOBIN=$(BIN_DIR) go install github.com/mitchellh/gox
 	GOBIN=$(BIN_DIR) go install github.com/axw/gocov/gocov
 	GOBIN=$(BIN_DIR) go install golang.org/x/tools/cmd/cover
-
-# Gometalinter is deprecated and broken dependency so let's use with GO111MODULE=off
-prepare.metalinter:
-	GO111MODULE=off go get -u github.com/alecthomas/gometalinter
-	GO111MODULE=off gometalinter --fast --install
 
 mod:
 	@go mod download
@@ -34,6 +29,7 @@ compile: mod
 	-osarch="linux/amd64" \
 	-osarch="windows/amd64" \
 	-osarch="windows/i386" \
+	-osarch="darwin/arm64" \
 	-output "build/{{.Dir}}_$(VERSION)_{{.OS}}_{{.Arch}}/$(NAME)" \
 	${SOURCE_FILES}
 

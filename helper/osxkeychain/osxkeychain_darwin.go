@@ -3,14 +3,6 @@
 
 package osxkeychain
 
-/*
-#cgo LDFLAGS: -framework Security -framework CoreFoundation
-
-#include <CoreFoundation/CoreFoundation.h>
-#include <Security/Security.h>
-*/
-import "C"
-
 import (
 	"errors"
 	"net"
@@ -158,6 +150,11 @@ func (h Osxkeychain) List() (map[string]string, error) {
 		resp[u.String()] = r.Account
 	}
 	return resp, nil
+}
+
+// SupportsCredentialStorage returns true since storage is supported
+func (Osxkeychain) SupportsCredentialStorage() bool {
+	return true
 }
 
 const (
