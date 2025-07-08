@@ -1,209 +1,190 @@
-// Copyright (c) 2016 David Calavera
+//go:build darwin && cgo
+// +build darwin,cgo
 
-// Permission is hereby granted, free of charge, to any person obtaining
-// a copy of this software and associated documentation files (the
-// "Software"), to deal in the Software without restriction, including
-// without limitation the rights to use, copy, modify, merge, publish,
-// distribute, sublicense, and/or sell copies of the Software, and to
-// permit persons to whom the Software is furnished to do so, subject to
-// the following conditions:
-
-// The above copyright notice and this permission notice shall be
-// included in all copies or substantial portions of the Software.
-
-// THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
-// EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
-// MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
-// IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
-// CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
-// TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
-// SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
-//
-// https://github.com/docker/docker-credential-helpers
 package osxkeychain
 
 /*
-#cgo CFLAGS: -x objective-c -mmacosx-version-min=10.10
-#cgo LDFLAGS: -framework Security -framework Foundation
+#cgo LDFLAGS: -framework Security -framework CoreFoundation
 
-#include "osxkeychain_darwin.h"
-#include <stdlib.h>
+#include <CoreFoundation/CoreFoundation.h>
+#include <Security/Security.h>
 */
 import "C"
+
 import (
 	"errors"
+	"net"
 	"net/url"
 	"strconv"
-	"strings"
-	"unsafe"
 
 	"github.com/aliyun/saml2alibabacloud/helper/credentials"
+	"github.com/keybase/go-keychain"
 	"github.com/sirupsen/logrus"
 )
 
 var logger = logrus.WithField("helper", "osxkeychain")
 
-// errCredentialsNotFound is the specific error message returned by OS X
-// when the credentials are not in the keychain.
-const errCredentialsNotFound = "The specified item could not be found in the keychain."
+// https://opensource.apple.com/source/Security/Security-55471/sec/Security/SecBase.h.auto.html
+const (
+	// errCredentialsNotFound is the specific error message returned by OS X
+	// when the credentials are not in the keychain.
+	errCredentialsNotFound = "The specified item could not be found in the keychain. (-25300)"
+	// errInteractionNotAllowed is the specific error message returned by OS X
+	// when environment does not allow showing dialog to unlock keychain.
+	errInteractionNotAllowed = "User interaction is not allowed. (-25308)"
+)
+
+// ErrInteractionNotAllowed is returned if keychain password prompt can not be shown.
+var ErrInteractionNotAllowed = errors.New(`keychain cannot be accessed because the current session does not allow user interaction. The keychain may be locked; unlock it by running "security -v unlock-keychain ~/Library/Keychains/login.keychain-db" and try again`)
 
 // Osxkeychain handles secrets using the OS X Keychain as store.
 type Osxkeychain struct{}
 
 // Add adds new credentials to the keychain.
 func (h Osxkeychain) Add(creds *credentials.Credentials) error {
-	h.Delete(creds.ServerURL)
+	_ = h.Delete(creds.ServerURL) // ignore errors as existing credential may not exist.
 
-	s, err := splitServer(creds.ServerURL)
-	if err != nil {
+	item := keychain.NewItem()
+	item.SetSecClass(keychain.SecClassInternetPassword)
+	item.SetLabel(credentials.CredsLabel)
+	item.SetAccount(creds.Username)
+	item.SetData([]byte(creds.Secret))
+	// Prior to v0.9, the credential helper was searching for credentials with
+	// the "dflt" authentication type (see [1]). Since v0.9.0, Get doesn't use
+	// that attribute anymore, and v0.9.0 - v0.9.2 were not setting it here
+	// either.
+	//
+	// In order to keep compatibility with older versions, we need to store
+	// credentials with this attribute set. This way, credentials stored with
+	// newer versions can be retrieved by older versions.
+	//
+	// [1]: https://github.com/docker/docker-credential-helpers/blob/v0.8.2/osxkeychain/osxkeychain.c#L66
+	item.SetAuthenticationType("dflt")
+	if err := splitServer(creds.ServerURL, item); err != nil {
 		return err
 	}
-	defer freeServer(s)
 
-	label := C.CString(credentials.CredsLabel)
-	defer C.free(unsafe.Pointer(label))
-	username := C.CString(creds.Username)
-	defer C.free(unsafe.Pointer(username))
-	secret := C.CString(creds.Secret)
-	defer C.free(unsafe.Pointer(secret))
-
-	errMsg := C.keychain_add(s, label, username, secret)
-	if errMsg != nil {
-		defer C.free(unsafe.Pointer(errMsg))
-		return errors.New(C.GoString(errMsg))
-	}
-
-	return nil
+	return keychain.AddItem(item)
 }
 
 // Delete removes credentials from the keychain.
 func (h Osxkeychain) Delete(serverURL string) error {
-	s, err := splitServer(serverURL)
-	if err != nil {
+	item := keychain.NewItem()
+	item.SetSecClass(keychain.SecClassInternetPassword)
+	if err := splitServer(serverURL, item); err != nil {
 		return err
 	}
-	defer freeServer(s)
-
-	errMsg := C.keychain_delete(s)
-	if errMsg != nil {
-		defer C.free(unsafe.Pointer(errMsg))
-		return errors.New(C.GoString(errMsg))
+	if err := keychain.DeleteItem(item); err != nil {
+		switch err.Error() {
+		case errCredentialsNotFound:
+			return credentials.ErrCredentialsNotFound
+		case errInteractionNotAllowed:
+			return ErrInteractionNotAllowed
+		default:
+			return err
+		}
 	}
-
 	return nil
 }
 
 // Get returns the username and secret to use for a given registry server URL.
 func (h Osxkeychain) Get(serverURL string) (string, string, error) {
-
 	logger.WithField("serverURL", serverURL).Debug("Get credentials")
 
-	s, err := splitServer(serverURL)
-	if err != nil {
+	item := keychain.NewItem()
+	item.SetSecClass(keychain.SecClassInternetPassword)
+	item.SetMatchLimit(keychain.MatchLimitOne)
+	item.SetReturnAttributes(true)
+	item.SetReturnData(true)
+	if err := splitServer(serverURL, item); err != nil {
 		return "", "", err
 	}
-	defer freeServer(s)
 
-	var usernameLen C.uint
-	var username *C.char
-	var secretLen C.uint
-	var secret *C.char
-	defer C.free(unsafe.Pointer(username))
-	defer C.free(unsafe.Pointer(secret))
-
-	errMsg := C.keychain_get(s, &usernameLen, &username, &secretLen, &secret)
-	if errMsg != nil {
-		defer C.free(unsafe.Pointer(errMsg))
-		goMsg := C.GoString(errMsg)
-
-		if goMsg == errCredentialsNotFound {
-			logger.WithField("goMsg", goMsg).Debug("Get credentials")
+	res, err := keychain.QueryItem(item)
+	if err != nil {
+		switch err.Error() {
+		case errCredentialsNotFound:
+			logger.WithField("goMsg", err.Error()).Debug("Get credentials")
 			return "", "", credentials.ErrCredentialsNotFound
+		case errInteractionNotAllowed:
+			return "", "", ErrInteractionNotAllowed
+		default:
+			logger.WithField("goMsg", err.Error()).Error("keychain Get returned error")
+			return "", "", err
 		}
-
-		logger.WithField("goMsg", goMsg).Error("keychain Get returned error")
-		return "", "", errors.New(goMsg)
+	} else if len(res) == 0 {
+		logger.WithField("goMsg", err.Error()).Debug("Get credentials")
+		return "", "", credentials.ErrCredentialsNotFound
 	}
 
-	user := C.GoStringN(username, C.int(usernameLen))
-	pass := C.GoStringN(secret, C.int(secretLen))
-
-	logger.WithField("user", user).Debug("Get credentials")
-
-	return user, pass, nil
+	return res[0].Account, string(res[0].Data), nil
 }
 
 // List returns the stored URLs and corresponding usernames.
 func (h Osxkeychain) List() (map[string]string, error) {
-	credsLabelC := C.CString(credentials.CredsLabel)
-	defer C.free(unsafe.Pointer(credsLabelC))
+	item := keychain.NewItem()
+	item.SetSecClass(keychain.SecClassInternetPassword)
+	item.SetMatchLimit(keychain.MatchLimitAll)
+	item.SetReturnAttributes(true)
+	item.SetLabel(credentials.CredsLabel)
 
-	var pathsC **C.char
-	defer C.free(unsafe.Pointer(pathsC))
-	var acctsC **C.char
-	defer C.free(unsafe.Pointer(acctsC))
-	var listLenC C.uint
-	errMsg := C.keychain_list(credsLabelC, &pathsC, &acctsC, &listLenC)
-	if errMsg != nil {
-		defer C.free(unsafe.Pointer(errMsg))
-		goMsg := C.GoString(errMsg)
-		return nil, errors.New(goMsg)
+	res, err := keychain.QueryItem(item)
+	if err != nil {
+		switch err.Error() {
+		case errCredentialsNotFound:
+			return make(map[string]string), nil
+		case errInteractionNotAllowed:
+			return nil, ErrInteractionNotAllowed
+		default:
+			return nil, err
+		}
 	}
 
-	defer C.freeListData(&pathsC, listLenC)
-	defer C.freeListData(&acctsC, listLenC)
-
-	var listLen int
-	listLen = int(listLenC)
-	pathTmp := (*[1 << 30]*C.char)(unsafe.Pointer(pathsC))[:listLen:listLen]
-	acctTmp := (*[1 << 30]*C.char)(unsafe.Pointer(acctsC))[:listLen:listLen]
-	//taking the array of c strings into go while ignoring all the stuff irrelevant to credentials-helper
 	resp := make(map[string]string)
-	for i := 0; i < listLen; i++ {
-		if C.GoString(pathTmp[i]) == "0" {
-			continue
+	for _, r := range res {
+		proto := "http"
+		if r.Protocol == kSecProtocolTypeHTTPS {
+			proto = "https"
 		}
-		resp[C.GoString(pathTmp[i])] = C.GoString(acctTmp[i])
+		host := r.Server
+		if r.Port != 0 {
+			host = net.JoinHostPort(host, strconv.Itoa(int(r.Port)))
+		}
+		u := url.URL{
+			Scheme: proto,
+			Host:   host,
+			Path:   r.Path,
+		}
+		resp[u.String()] = r.Account
 	}
 	return resp, nil
 }
 
-// SupportsCredentialsStorage returns true since storage is supported
-func (Osxkeychain) SupportsCredentialStorage() bool {
-	return true
-}
+const (
+	// Hardcoded protocol types matching their Objective-C equivalents.
+	// https://developer.apple.com/documentation/security/ksecattrprotocolhttps?language=objc
+	kSecProtocolTypeHTTPS = "htps" // This is NOT a typo.
+	// https://developer.apple.com/documentation/security/ksecattrprotocolhttp?language=objc
+	kSecProtocolTypeHTTP = "http"
+)
 
-func splitServer(serverURL string) (*C.struct_Server, error) {
+func splitServer(serverURL string, item keychain.Item) error {
 	u, err := url.Parse(serverURL)
 	if err != nil {
-		return nil, err
+		return err
 	}
-
-	hostAndPort := strings.Split(u.Host, ":")
-	host := hostAndPort[0]
-	var port int
-	if len(hostAndPort) == 2 {
-		p, err := strconv.Atoi(hostAndPort[1])
+	item.SetProtocol(kSecProtocolTypeHTTPS)
+	if u.Scheme == "http" {
+		item.SetProtocol(kSecProtocolTypeHTTP)
+	}
+	item.SetServer(u.Hostname())
+	if p := u.Port(); p != "" {
+		port, err := strconv.Atoi(p)
 		if err != nil {
-			return nil, err
+			return err
 		}
-		port = p
+		item.SetPort(int32(port))
 	}
-
-	proto := C.kSecProtocolTypeHTTPS
-	if u.Scheme != "https" {
-		proto = C.kSecProtocolTypeHTTP
-	}
-
-	return &C.struct_Server{
-		proto: C.SecProtocolType(proto),
-		host:  C.CString(host),
-		port:  C.uint(port),
-		path:  C.CString(u.Path),
-	}, nil
-}
-
-func freeServer(s *C.struct_Server) {
-	C.free(unsafe.Pointer(s.host))
-	C.free(unsafe.Pointer(s.path))
+	item.SetPath(u.Path)
+	return nil
 }
