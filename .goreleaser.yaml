@@ -26,7 +26,7 @@ builds:
     goarch:
       - amd64
       - arm64
-      - "386"
+      # - "386"
       - arm
     env:
       - CGO_ENABLED=0
@@ -40,7 +40,7 @@ builds:
     goarch:
       - amd64
       - arm64
-      - "386"
+      # - "386"
       - arm
     env:
       - CGO_ENABLED=0
