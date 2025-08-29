@@ -15,7 +15,7 @@ import (
 
 var (
 	// Version app version
-	Version = "0.0.8"
+	Version = "0.0.9"
 )
 
 // The `cmdLineList` type is used to make a `[]string` meet the requirements
