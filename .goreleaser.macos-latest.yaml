@@ -1,0 +1,44 @@
+project_name: saml2alibabacloud
+release:
+  github:
+    owner: aliyun
+    name: saml2alibabacloud
+
+builds:
+  - id: saml2alibabacloud_darwin
+    main: ./cmd/saml2alibabacloud/main.go
+    binary: saml2alibabacloud
+    flags:
+    - -trimpath
+    - -v
+    ldflags:
+      - -s -w -X main.Version={{.Version}} -X main.commit={{.Commit}} -X main.date={{.Date}}
+    goos:
+      - darwin
+    goarch:
+      - amd64
+      - arm64
+      - arm
+    env:
+      - CGO_ENABLED=1
+archives:
+  - id: default
+    ids:
+      - saml2alibabacloud_darwin
+    formats: 
+      - tar.gz
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    files:
+      - README.md
+      - LICENSE.md
+    wrap_in_directory: false
+
+checksum:
+  name_template: "{{ .ProjectName }}_{{ .Version }}_darwin_checksums.txt"
+
+changelog:
+  sort: asc
+  filters:
+    exclude:
+      - '^docs:'
+      - '^test:' 

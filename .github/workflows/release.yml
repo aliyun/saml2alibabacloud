@@ -21,7 +21,12 @@ permissions:
 
 jobs:
   goreleaser:
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -38,6 +43,6 @@ jobs:
           distribution: goreleaser
           # 'latest', 'nightly', or a semver
           version: "latest"
-          args: release --clean
+          args: release --clean --config .goreleaser.${{ matrix.os }}.yml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -12,7 +12,12 @@ jobs:
 
   build:
     name: Build
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+    runs-on: ${{ matrix.os }}
     steps:
 
     - name: Check out code into the Go module directory
@@ -27,4 +32,4 @@ jobs:
       uses: goreleaser/goreleaser-action@v6
       with:
         version: latest
-        args: build --snapshot --clean --config .goreleaser.yaml
+        args: build --snapshot --clean --config .goreleaser.${{ matrix.os }}.yaml
