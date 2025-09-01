@@ -5,19 +5,6 @@ release:
     name: saml2alibabacloud
 
 builds:
-  - id: saml2alibabacloud_darwin
-    main: ./cmd/saml2alibabacloud/main.go
-    binary: saml2alibabacloud
-    goos:
-      - darwin
-    goarch:
-      - amd64
-      - arm64
-      - arm
-    env:
-      - CGO_ENABLED=1
-    ldflags:
-      - -s -w -X main.Version={{.Version}}
   - id: saml2alibabacloud_windows
     main: ./cmd/saml2alibabacloud/main.go
     binary: saml2alibabacloud
@@ -26,7 +13,7 @@ builds:
     goarch:
       - amd64
       - arm64
-      # - "386"
+      - "386"
       - arm
     env:
       - CGO_ENABLED=0
@@ -40,7 +27,7 @@ builds:
     goarch:
       - amd64
       - arm64
-      # - "386"
+      - "386"
       - arm
     env:
       - CGO_ENABLED=0
@@ -50,7 +37,6 @@ builds:
 archives:
   - id: default
     ids:
-      - saml2alibabacloud_darwin
       - saml2alibabacloud_linux
     formats: 
       - tar.gz
@@ -72,12 +58,7 @@ archives:
     wrap_in_directory: false
 
 checksum:
-  name_template: "checksums.txt"
-
-# create a source tarball
-# https://goreleaser.com/customization/source/
-source:
-  enabled: true
+  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_checksums.txt"
 
 changelog:
   sort: asc
