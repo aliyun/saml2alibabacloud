@@ -43,6 +43,6 @@ jobs:
           distribution: goreleaser
           # 'latest', 'nightly', or a semver
           version: "latest"
-          args: release --clean --config .goreleaser.${{ matrix.os }}.yml
+          args: release --clean --config .goreleaser.${{ matrix.os }}.yaml
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
