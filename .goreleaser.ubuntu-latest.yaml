@@ -40,7 +40,7 @@ archives:
       - saml2alibabacloud_linux
     formats: 
       - tar.gz
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
     files:
       - README.md
       - LICENSE.md
@@ -51,14 +51,14 @@ archives:
       - saml2alibabacloud_windows
     formats:
       - zip
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
     files:
       - README.md
       - LICENSE.md
     wrap_in_directory: false
 
 checksum:
-  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}_checksums.txt"
+  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}_checksums.txt"
 
 changelog:
   sort: asc
