@@ -34,7 +34,7 @@ archives:
     wrap_in_directory: false
 
 checksum:
-  name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}_checksums.txt"
+  name_template: "{{ .ProjectName }}_{{ .Version }}_darwin_checksums.txt"
 
 changelog:
   sort: asc
