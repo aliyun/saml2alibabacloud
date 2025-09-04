@@ -51,7 +51,6 @@ archives:
       - saml2alibabacloud_windows
     formats:
       - zip
-    name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Arch }}"
     files:
       - README.md
       - LICENSE.md
