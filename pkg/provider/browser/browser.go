@@ -91,6 +91,18 @@ func (cl *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 		browserType = pw.Firefox
 	} else if cl.BrowserType == "webkit" {
 		browserType = pw.WebKit
+	} else if cl.BrowserType == "chrome" {
+		browserType = pw.Chrome
+	} else if cl.BrowserType == "chrome-beta" {
+		browserType = pw.ChromeBeta
+	} else if cl.BrowserType == "chrome-dev" {
+		browserType = pw.ChromeDev
+	} else if cl.BrowserType == "chrome-canary" {
+		browserType = pw.ChromeCanary
+	} else if cl.BrowserType == "msedge" {
+		browserType = pw.Msedge
+	} else if cl.BrowserType == "msedge-beta" {
+		browserType = pw.MsedgeBeta
 	}
 
 	// You can set the path to a browser executable to run instead of the playwright-go bundled one. If `executablePath`
