@@ -27,6 +27,9 @@ const (
 	// DefaultProfile this is the default profile name used to save the credentials in the `aliyun` cli
 	// see https://www.alibabacloud.com/help/doc-detail/121259.htm
 	DefaultProfile = "saml"
+
+	// Environment Variable used to define the Keyring Backend for Linux based distro
+	KeyringBackEnvironmentVariableName = "SAML2ALIBABACLOUD_KEYRING_BACKEND"
 )
 
 // IDPAccount saml IDP account
