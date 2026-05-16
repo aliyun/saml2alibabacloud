@@ -130,7 +130,7 @@ func (cl *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 var getSAMLResponse = func(page playwright.Page, loginDetails *creds.LoginDetails, client *Client) (string, error) {
 	logger.WithField("URL", loginDetails.URL).Info("opening browser")
 
-	if _, err := page.Goto(loginDetails.URL); err != nil {
+	if _, err := page.Goto(loginDetails.URL, playwright.PageGotoOptions{Timeout: playwright.Float(DEFAULT_TIMEOUT)}); err != nil {
 		return "", err
 	}
 
