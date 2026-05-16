@@ -1,6 +1,7 @@
 package googleapps
 
 import (
+	"bufio"
 	"bytes"
 	b64 "encoding/base64"
 	"encoding/json"
@@ -13,18 +14,20 @@ import (
 	"strings"
 
 	"github.com/PuerkitoBio/goquery"
+	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/aliyun/saml2alibabacloud/pkg/cfg"
 	"github.com/aliyun/saml2alibabacloud/pkg/creds"
 	"github.com/aliyun/saml2alibabacloud/pkg/prompter"
 	"github.com/aliyun/saml2alibabacloud/pkg/provider"
-	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 )
 
 var logger = logrus.WithField("provider", "googleapps")
 
 // Client wrapper around Google Apps.
 type Client struct {
+	provider.ValidateBase
+
 	client *provider.HTTPClient
 }
 
@@ -52,32 +55,32 @@ func (kc *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 		return "", errors.Wrap(err, "error loading first page")
 	}
 
+	// Google supports only JavaScript-enabled clients
+	authForm.Set("bgresponse", "js_enabled")
+
 	authForm.Set("Email", loginDetails.Username)
 
+	// Post email address w/o password, then Get the password-input page
 	passwordURL, passwordForm, err := kc.loadLoginPage(authURL+"?hl=en&loc=US", loginDetails.URL+"&hl=en&loc=US", authForm)
 	if err != nil {
-		return "", errors.Wrap(err, "error loading login page")
+		//if failed, try with "identifier"
+		authForm.Set("Email", "") // Clear previous key
+		authForm.Set("identifier", loginDetails.Username)
+		passwordURL, passwordForm, err = kc.loadLoginPage(authURL+"?hl=en&loc=US", loginDetails.URL+"&hl=en&loc=US", authForm)
+
+		if err != nil {
+			return "", errors.Wrap(err, "error loading login page")
+		}
 	}
 
 	logger.Debugf("loginURL: %s", passwordURL)
 
-	authForm.Set("Passwd", loginDetails.Password)
+	passwordForm.Set("Passwd", loginDetails.Password)
+	passwordForm.Set("TrustDevice", "on")
 
 	referingURL := passwordURL
 
-	if _, rawIdPresent := passwordForm["rawidentifier"]; rawIdPresent {
-		authForm.Set("rawidentifier", loginDetails.Username)
-		referingURL = authURL
-	}
-
-	if v, tlPresent := passwordForm["TL"]; tlPresent {
-		authForm.Set("TL", v[0])
-	}
-	if v, gxfPresent := passwordForm["gxf"]; gxfPresent {
-		authForm.Set("gxf", v[0])
-	}
-
-	responseDoc, err := kc.loadChallengePage(passwordURL+"?hl=en&loc=US", referingURL, authForm, loginDetails)
+	responseDoc, err := kc.loadChallengePage(passwordURL+"?hl=en&loc=US", referingURL, passwordForm, loginDetails)
 	if err != nil {
 		return "", errors.Wrap(err, "error loading challenge page")
 	}
@@ -85,6 +88,7 @@ func (kc *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 	captchaInputIds := []string{
 		"logincaptcha",
 		"identifier-captcha-input",
+		"captchaimg",
 	}
 
 	var captchaFound *goquery.Selection
@@ -100,6 +104,10 @@ func (kc *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 
 	for captchaFound != nil && captchaFound.Length() > 0 {
 		captchaImgDiv := responseDoc.Find(".captcha-img")
+		if captchaImgDiv != nil {
+			captchaImgDiv = responseDoc.Find("div[data-auto-init='CaptchaInput']")
+			captchaInputId = "ca"
+		}
 		captchaPictureSrc, found := goquery.NewDocumentFromNode(captchaImgDiv.Children().Nodes[0]).Attr("src")
 
 		if !found {
@@ -155,10 +163,25 @@ func (kc *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 
 	samlAssertion := mustFindInputByName(responseDoc, "SAMLResponse")
 	if samlAssertion == "" {
+		if responseDoc.Selection.Find("#passwordError").Text() != "" {
+			return "", errors.New("Password error")
+		}
+
+		if err := isMissing2StepSetup(responseDoc); err != nil {
+			return "", err
+		}
+
 		return "", errors.New("page is missing saml assertion")
 	}
 
 	return samlAssertion, nil
+}
+
+func isMissing2StepSetup(responseDoc *goquery.Document) error {
+	if responseDoc.Selection.Find("section.aN1Vld ").Text() != "" {
+		return errors.New("Because of your organization settings, you must set-up 2-Step Verification in your account")
+	}
+	return nil
 }
 
 func (kc *Client) tryDisplayCaptcha(captchaPictureURL string) (string, error) {
@@ -173,7 +196,7 @@ func (kc *Client) tryDisplayCaptcha(captchaPictureURL string) (string, error) {
 }
 
 func (kc *Client) iTermCaptchaPrompt(captchaPictureURL string) (string, error) {
-	fmt.Printf("Detected iTerm, displaying URL: %s\n", captchaPictureURL)
+	log.Printf("Detected iTerm, displaying URL: %s\n", captchaPictureURL)
 	imgResp, err := kc.client.Get(captchaPictureURL)
 	if err != nil {
 		return "", errors.Wrap(err, "unable to fetch captcha image")
@@ -184,7 +207,7 @@ func (kc *Client) iTermCaptchaPrompt(captchaPictureURL string) (string, error) {
 	_ = b64Encoder.Close()
 
 	if os.Getenv("TERM") == "screen" {
-		fmt.Println("Detected tmux, using specific workaround...")
+		log.Println("Detected tmux, using specific workaround...")
 		fmt.Printf("\033Ptmux;\033\033]1337;File=width=40;preserveAspectRatio=1;inline=1;:%s\a\033\\\n", buf.String())
 	} else {
 		fmt.Printf("\033]1337;File=width=40;preserveAspectRatio=1;inline=1;:%s\a\n", buf.String())
@@ -225,62 +248,7 @@ func (kc *Client) loadFirstPage(loginDetails *creds.LoginDetails) (string, url.V
 		return "", nil, errors.Wrap(err, "failed to build login form data")
 	}
 
-	_, loginPageV1 := authForm["GALX"]
-
-	var postForm url.Values
-	// using a field which is known to be in the original login page
-	if loginPageV1 {
-		// Login page v1
-		postForm = url.Values{
-			"bgresponse":               []string{"js_disabled"},
-			"checkConnection":          []string{""},
-			"checkedDomains":           []string{"youtube"},
-			"continue":                 []string{authForm.Get("continue")},
-			"gxf":                      []string{authForm.Get("gxf")},
-			"identifier-captcha-input": []string{""},
-			"identifiertoken":          []string{""},
-			"identifiertoken_audio":    []string{""},
-			"ltmpl":                    []string{"popup"},
-			"oauth":                    []string{"1"},
-			"Page":                     []string{authForm.Get("Page")},
-			"Passwd":                   []string{""},
-			"PersistentCookie":         []string{"yes"},
-			"ProfileInformation":       []string{""},
-			"pstMsg":                   []string{"0"},
-			"sarp":                     []string{"1"},
-			"scc":                      []string{"1"},
-			"SessionState":             []string{authForm.Get("SessionState")},
-			"signIn":                   []string{authForm.Get("signIn")},
-			"_utf8":                    []string{authForm.Get("_utf8")},
-			"GALX":                     []string{authForm.Get("GALX")},
-		}
-	} else {
-		// Login page v2
-		postForm = url.Values{
-			"challengeId":     []string{"1"},
-			"challengeType":   []string{"1"},
-			"continue":        []string{authForm.Get("continue")},
-			"scc":             []string{"1"},
-			"sarp":            []string{"1"},
-			"checkeddomains":  []string{"youtube"},
-			"checkConnection": []string{"youtube:930:1"},
-			"pstMessage":      []string{"1"},
-			"oauth":           []string{authForm.Get("oauth")},
-			"flowName":        []string{authForm.Get("flowName")},
-			"faa":             []string{"1"},
-			"Email":           []string{""},
-			"Passwd":          []string{""},
-			"TrustDevice":     []string{"on"},
-			"bgresponse":      []string{"js_disabled"},
-		}
-		for _, k := range []string{"TL", "gxf"} {
-			if v, ok := authForm[k]; ok {
-				postForm.Set(k, v[0])
-			}
-		}
-	}
-
-	return submitURL, postForm, err
+	return submitURL, authForm, err
 }
 
 func (kc *Client) loadLoginPage(submitURL string, referer string, authForm url.Values) (string, url.Values, error) {
@@ -320,6 +288,8 @@ func (kc *Client) loadLoginPage(submitURL string, referer string, authForm url.V
 
 func (kc *Client) loadChallengePage(submitURL string, referer string, authForm url.Values, loginDetails *creds.LoginDetails) (*goquery.Document, error) {
 
+	authForm.Set("bgresponse", "js_enabled")
+
 	req, err := http.NewRequest("POST", submitURL, strings.NewReader(authForm.Encode()))
 	if err != nil {
 		return nil, errors.Wrap(err, "error retrieving login form")
@@ -353,11 +323,13 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 
 	secondFactorHeader := "This extra step shows it’s really you trying to sign in"
 	secondFactorHeader2 := "This extra step shows that it’s really you trying to sign in"
+	secondFactorHeader3 := "2-Step Verification"
 	secondFactorHeaderJp := "2 段階認証プロセス"
 
 	// have we been asked for 2-Step Verification
 	if extractNodeText(doc, "h2", secondFactorHeader) != "" ||
 		extractNodeText(doc, "h2", secondFactorHeader2) != "" ||
+		extractNodeText(doc, "h1", secondFactorHeader3) != "" ||
 		extractNodeText(doc, "h1", secondFactorHeaderJp) != "" {
 
 		responseForm, secondActionURL, err := extractInputsByFormID(doc, "challenge")
@@ -368,7 +340,7 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 		logger.Debugf("secondActionURL: %s", secondActionURL)
 
 		switch {
-		case strings.Contains(secondActionURL, "challenge/totp/"): // handle TOTP challenge
+		case strings.Contains(secondActionURL, "challenge/totp"): // handle TOTP challenge
 
 			var token = loginDetails.MFAToken
 			if token == "" {
@@ -379,7 +351,27 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 			responseForm.Set("TrustDevice", "on") // Don't ask again on this computer
 
 			return kc.loadResponsePage(secondActionURL, submitURL, responseForm)
-		case strings.Contains(secondActionURL, "challenge/ipp/"): // handle SMS challenge
+		case strings.Contains(secondActionURL, "challenge/ipp"): // handle SMS challenge
+
+			if extractNodeText(doc, "button", "Send text message") != "" {
+				responseForm.Set("SendMethod", "SMS") // extractInputsByFormID does not extract the name and value from <button> tag that is the form submit
+				doc, err = kc.loadResponsePage(secondActionURL, submitURL, responseForm)
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to post sms request form")
+				}
+				doc.Url, err = url.Parse(submitURL)
+				if err != nil {
+					return nil, errors.Wrap(err, "failed to define URL for html doc")
+				}
+
+				submitURL = secondActionURL
+				responseForm, secondActionURL, err = extractInputsByFormID(doc, "challenge")
+				if err != nil {
+					return nil, errors.Wrap(err, "unable to extract challenge form")
+				}
+
+				logger.Debugf("After sms request secondActionURL: %s", secondActionURL)
+			}
 
 			var token = prompter.StringRequired("Enter SMS token: G-")
 
@@ -388,7 +380,7 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 
 			return kc.loadResponsePage(secondActionURL, submitURL, responseForm)
 
-		case strings.Contains(secondActionURL, "challenge/sk/"): // handle u2f challenge
+		case strings.Contains(secondActionURL, "challenge/sk"): // handle u2f challenge
 			facetComponents, err := url.Parse(secondActionURL)
 			if err != nil {
 				return nil, errors.Wrap(err, "unable to parse action URL for U2F challenge")
@@ -403,7 +395,7 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 
 			response, err := u2fClient.ChallengeU2F()
 			if err != nil {
-				errors.Wrap(err, "Second factor failed.")
+				logger.WithError(err).Error("Second factor failed.")
 				return kc.skipChallengePage(doc, submitURL, secondActionURL, loginDetails)
 			}
 
@@ -411,7 +403,7 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 			responseForm.Set("TrustDevice", "on")
 
 			return kc.loadResponsePage(secondActionURL, submitURL, responseForm)
-		case strings.Contains(secondActionURL, "challenge/az/"): // handle phone challenge
+		case strings.Contains(secondActionURL, "challenge/az"): // handle phone challenge
 
 			dataAttrs := extractDataAttributes(doc, "div[data-context]", []string{"data-context", "data-gapi-url", "data-tx-id", "data-api-key", "data-tx-lifetime"})
 
@@ -421,7 +413,7 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 				"txId": dataAttrs["data-tx-id"],
 			}
 
-			fmt.Println("Open the Google App, and tap 'Yes' on the prompt to sign in")
+			log.Println("Open the Google App, and tap 'Yes' on the prompt to sign in")
 
 			_, err := kc.postJSON(fmt.Sprintf("https://content.googleapis.com/cryptauth/v1/authzen/awaittx?alt=json&key=%s", dataAttrs["data-api-key"]), waitValues, submitURL)
 			if err != nil {
@@ -433,8 +425,24 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 
 			return kc.loadResponsePage(secondActionURL, submitURL, responseForm)
 
-		case strings.Contains(secondActionURL, "challenge/skotp/"): // handle one-time HOTP challenge
-			fmt.Println("Get a one-time code by visiting https://g.co/sc on another device where you can use your security key")
+		case strings.Contains(secondActionURL, "challenge/dp"): // handle device push challenge
+			if extraNumber := extractDevicePushExtraNumber(doc); extraNumber != "" {
+				log.Println("Check your phone and tap 'Yes' on the prompt, then tap the number:")
+				log.Printf("\t%v\n", extraNumber)
+				log.Println("Then press ENTER to continue.")
+			} else {
+				log.Print("Check your phone and tap 'Yes' on the prompt. Then press ENTER to continue.")
+			}
+
+			_, err := bufio.NewReader(os.Stdin).ReadBytes('\n')
+			if err != nil {
+				return nil, errors.Wrap(err, "error reading new line \\n")
+			}
+			responseForm.Set("TrustDevice", "on") // Don't ask again on this computer
+			return kc.loadResponsePage(secondActionURL, submitURL, responseForm)
+
+		case strings.Contains(secondActionURL, "challenge/skotp"): // handle one-time HOTP challenge
+			log.Println("Get a one-time code by visiting https://g.co/sc on another device where you can use your security key")
 			var token = prompter.RequestSecurityCode("000 000")
 
 			responseForm.Set("Pin", token)
@@ -445,6 +453,8 @@ func (kc *Client) loadChallengePage(submitURL string, referer string, authForm u
 
 		return kc.skipChallengePage(doc, submitURL, secondActionURL, loginDetails)
 
+	} else if extractNodeText(doc, "h2", "To sign in to your Google Account, choose a task from the list below.") != "" {
+		return kc.loadChallengeEntryPage(doc, submitURL, loginDetails)
 	}
 
 	return doc, nil
@@ -492,6 +502,10 @@ func (kc *Client) loadAlternateChallengePage(submitURL string, referer string, a
 		return nil, errors.Wrap(err, "failed to define URL for html doc")
 	}
 
+	return kc.loadChallengeEntryPage(doc, submitURL, loginDetails)
+}
+
+func (kc *Client) loadChallengeEntryPage(doc *goquery.Document, submitURL string, loginDetails *creds.LoginDetails) (*goquery.Document, error) {
 	var challengeEntry string
 
 	doc.Find("form[data-challengeentry]").EachWithBreak(func(i int, s *goquery.Selection) bool {
@@ -599,14 +613,26 @@ func mustFindErrorMsg(doc *goquery.Document) string {
 }
 
 func extractInputsByFormID(doc *goquery.Document, formID ...string) (url.Values, string, error) {
+	// First try to find form by specific id
 	for _, id := range formID {
 		formData, actionURL, err := extractInputsByFormQuery(doc, fmt.Sprintf("#%s", id))
-		if err != nil && strings.HasPrefix(err.Error(), "could not find form with query ") {
-			continue
+		if err == nil && actionURL != "" {
+			return formData, actionURL, nil
 		}
-		return formData, actionURL, err
 	}
-	return url.Values{}, "", errors.New("could not find any forms matching the provided IDs")
+
+	// If no form found by id or actionURL in the previous forms, search for any form
+	formData, actionURL, err := extractInputsByFormQuery(doc, "")
+	if err != nil && actionURL != "" {
+		return formData, actionURL, errors.New("could not find any forms with actions")
+	}
+
+	if len(formData) == 0 {
+		return nil, "", errors.New("could not find any forms")
+	}
+
+	// Fallback in case no forms with actionURL were found
+	return formData, actionURL, err
 }
 
 func extractInputsByFormQuery(doc *goquery.Document, formQuery string) (url.Values, string, error) {
@@ -693,7 +719,7 @@ func extractKeyHandles(doc *goquery.Document, challengeTxt string) (string, []st
 			firstIdx := strings.Index(val, "{")
 			lastIdx := strings.LastIndex(val, "}")
 			obj := []byte(val[firstIdx : lastIdx+1])
-			json.Unmarshal(obj, &result)
+			_ = json.Unmarshal(obj, &result) // ignore the error and continue
 			// Key handles
 			for _, val := range result {
 				list, ok := val.([]interface{})
@@ -775,4 +801,12 @@ func isAppId(val string) string {
 		return ""
 	}
 	return appId
+}
+
+func extractDevicePushExtraNumber(doc *goquery.Document) string {
+	extraNumber := ""
+	doc.Find("div[jsname=feLNVc]").Each(func(_ int, s *goquery.Selection) {
+		extraNumber = s.Text()
+	})
+	return extraNumber
 }
