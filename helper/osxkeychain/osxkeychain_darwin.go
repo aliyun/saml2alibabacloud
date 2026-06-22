@@ -96,7 +96,7 @@ func (h Osxkeychain) Get(serverURL string) (string, string, error) {
 	if err != nil {
 		switch err.Error() {
 		case errCredentialsNotFound:
-			logger.WithField("goMsg", err.Error()).Debug("Get credentials")
+			logger.Debug("Get credentials: empty result")
 			return "", "", credentials.ErrCredentialsNotFound
 		case errInteractionNotAllowed:
 			return "", "", ErrInteractionNotAllowed
@@ -105,7 +105,7 @@ func (h Osxkeychain) Get(serverURL string) (string, string, error) {
 			return "", "", err
 		}
 	} else if len(res) == 0 {
-		logger.WithField("goMsg", err.Error()).Debug("Get credentials")
+		logger.Debug("Get credentials: empty result")
 		return "", "", credentials.ErrCredentialsNotFound
 	}
 
