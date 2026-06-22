@@ -45,6 +45,7 @@ type IDPAccount struct {
 	Subdomain             string `ini:"subdomain"`   // used by OneLogin
 	RoleARN               string `ini:"role_arn"`
 	Region                string `ini:"region"`
+	STSEndpoint           string `ini:"sts_endpoint"`
 	HTTPAttemptsCount     string `ini:"http_attempts_count"`
 	HTTPRetryDelay        string `ini:"http_retry_delay"`
 	BrowserType           string `ini:"browser_type,omitempty"`            // used by 'Browser' Provider

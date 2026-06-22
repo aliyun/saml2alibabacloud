@@ -53,7 +53,7 @@ func Console(consoleFlags *flags.ConsoleFlags) error {
 
 	if consoleFlags.LoginExecFlags.ExecProfile != "" {
 		// Assume the desired role before generating env vars
-		alibabacloudCreds, err = assumeRoleWithProfile(alibabacloudCreds, consoleFlags.LoginExecFlags.ExecProfile, consoleFlags.LoginExecFlags.CommonFlags.SessionDuration)
+		alibabacloudCreds, err = assumeRoleWithProfile(alibabacloudCreds, account, consoleFlags.LoginExecFlags.ExecProfile, consoleFlags.LoginExecFlags.CommonFlags.SessionDuration)
 		if err != nil {
 			return errors.Wrap(err,
 				fmt.Sprintf("error acquiring credentials for profile: %s", consoleFlags.LoginExecFlags.ExecProfile))
@@ -82,7 +82,7 @@ func loadOrLogin(account *cfg.IDPAccount, sharedCreds *alibabacloudconfig.Creden
 		return loginRefreshCredentials(sharedCreds, execFlags.LoginExecFlags)
 	}
 
-	ok, err := checkToken(alibabacloudCreds)
+	ok, err := checkToken(alibabacloudCreds, account)
 	if err != nil {
 		return nil, errors.Wrap(err, "error validating token")
 	}
