@@ -2,12 +2,14 @@ package commands
 
 import (
 	"fmt"
+	"strings"
 	"log"
 
 	sdkError "github.com/aliyun/alibaba-cloud-sdk-go/sdk/errors"
 	"github.com/aliyun/alibaba-cloud-sdk-go/sdk/requests"
 	"github.com/aliyun/alibaba-cloud-sdk-go/services/sts"
 	"github.com/aliyun/saml2alibabacloud/pkg/alibabacloudconfig"
+	"github.com/aliyun/saml2alibabacloud/pkg/cfg"
 	"github.com/aliyun/saml2alibabacloud/pkg/flags"
 	"github.com/aliyun/saml2alibabacloud/pkg/shell"
 	"github.com/pkg/errors"
@@ -44,7 +46,7 @@ func Exec(execFlags *flags.LoginExecFlags, cmdline []string) error {
 		return errors.Wrap(err, "error loading credentials")
 	}
 
-	ok, err := checkToken(alibabacloudCreds)
+	ok, err := checkToken(alibabacloudCreds, account)
 	if err != nil {
 		return errors.Wrap(err, "error validating token")
 	}
@@ -58,7 +60,7 @@ func Exec(execFlags *flags.LoginExecFlags, cmdline []string) error {
 
 	if execFlags.ExecProfile != "" {
 		// Assume the desired role before generating env vars
-		alibabacloudCreds, err = assumeRoleWithProfile(alibabacloudCreds, execFlags.ExecProfile, execFlags.CommonFlags.SessionDuration)
+		alibabacloudCreds, err = assumeRoleWithProfile(alibabacloudCreds, account, execFlags.ExecProfile, execFlags.CommonFlags.SessionDuration)
 		if err != nil {
 			return errors.Wrap(err,
 				fmt.Sprintf("error acquiring credentials for profile: %s", execFlags.ExecProfile))
@@ -71,7 +73,7 @@ func Exec(execFlags *flags.LoginExecFlags, cmdline []string) error {
 // assumeRoleWithProfile uses an AlibabaCloud CLI profile (via ~/.aliyun/config.json) and performs (multiple levels of) role assumption
 // This is extremely useful in the case of a central "authentication account" which then requires secondary, and
 // often tertiary, role assumptions to acquire credentials for the target role.
-func assumeRoleWithProfile(alibabacloudCreds *alibabacloudconfig.AliCloudCredentials, targetProfile string, sessionDuration int) (*alibabacloudconfig.AliCloudCredentials, error) {
+func assumeRoleWithProfile(alibabacloudCreds *alibabacloudconfig.AliCloudCredentials, account *cfg.IDPAccount, targetProfile string, sessionDuration int) (*alibabacloudconfig.AliCloudCredentials, error) {
 
 	// get target profile
 	sharedCreds := alibabacloudconfig.NewSharedCredentials(targetProfile)
@@ -98,6 +100,8 @@ func assumeRoleWithProfile(alibabacloudCreds *alibabacloudconfig.AliCloudCredent
 	if err != nil {
 		return nil, err
 	}
+	client.Domain = strings.TrimPrefix(strings.TrimPrefix(account.STSEndpoint, "https://"), "http://")
+	client.GetConfig().Scheme = "HTTPS"
 	client.AppendUserAgent("saml2alibabacloud", "0.0.6")
 	request := sts.CreateAssumeRoleRequest()
 	request.RoleSessionName = targetCreds.AliCloudSessionToken
@@ -119,13 +123,15 @@ func assumeRoleWithProfile(alibabacloudCreds *alibabacloudconfig.AliCloudCredent
 	}, nil
 }
 
-func checkToken(alibabacloudCreds *alibabacloudconfig.AliCloudCredentials) (bool, error) {
+func checkToken(alibabacloudCreds *alibabacloudconfig.AliCloudCredentials, account *cfg.IDPAccount) (bool, error) {
 	client, err := sts.NewClientWithStsToken("cn-hangzhou", alibabacloudCreds.AliCloudAccessKey, alibabacloudCreds.AliCloudSecretKey, alibabacloudCreds.AliCloudSecurityToken)
 
 	if err != nil {
 		return false, err
 	}
 
+	client.Domain = strings.TrimPrefix(strings.TrimPrefix(account.STSEndpoint, "https://"), "http://")
+	client.GetConfig().Scheme = "HTTPS"
 	client.AppendUserAgent("saml2alibabacloud", "0.0.6")
 
 	request := sts.CreateGetCallerIdentityRequest()
