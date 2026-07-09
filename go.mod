@@ -11,7 +11,7 @@ require (
 	github.com/PuerkitoBio/goquery v1.9.2
 	github.com/alecthomas/kingpin v2.2.6+incompatible
 	github.com/aliyun/alibaba-cloud-sdk-go v1.61.681
-	github.com/aliyun/aliyun-cli v3.0.25+incompatible
+	github.com/aliyun/aliyun-cli v3.0.300+incompatible
 	github.com/avast/retry-go v2.6.0+incompatible
 	github.com/beevik/etree v1.0.1
 	github.com/danieljoos/wincred v1.1.2
