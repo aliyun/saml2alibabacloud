@@ -62,6 +62,8 @@ func (cl *Client) Authenticate(loginDetails *creds.LoginDetails) (string, error)
 		if err != nil {
 			return "", err
 		}
+	} else {
+		runOptions.SkipInstallBrowsers = true
 	}
 
 	pw, err := playwright.Run(&runOptions)
